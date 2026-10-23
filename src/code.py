@@ -13,10 +13,11 @@ from adafruit_hid.keyboard import Keyboard
 from adafruit_hid.keycode import Keycode
 from adafruit_hid.mouse import Mouse
 
-cc = ConsumerControl(usb_hid.devices)
+# Switch 2 test profile: boot.py exposes only the keyboard HID device.
+# Do not instantiate Mouse or ConsumerControl; those interfaces are disabled.
+cc = None
 kb = Keyboard(usb_hid.devices)
-ms = Mouse(usb_hid.devices)
-
+ms = None
 bt = digitalio.DigitalInOut(board.GP25)
 bt.direction = digitalio.Direction.INPUT
 bt.pull = digitalio.Pull.UP
@@ -55,35 +56,40 @@ def execute_command(function, command):
     elif function == "RELEASE":
         kb.release_all()
     elif function == "MOVE":
-        command = command.split(", ")
-        pos = [0] * 2
-        for i in range(0, len(command), 1):
-            pos[i] = int(command[i])
-        ms.move(x=pos[0], y=-1*pos[1], wheel=0)
+        # Mouse HID is intentionally unavailable in the keyboard-only profile.
+        if ms is not None:
+            command = command.split(", ")
+            pos = [0] * 2
+            for i in range(0, len(command), 1):
+                pos[i] = int(command[i])
+            ms.move(x=pos[0], y=-1*pos[1], wheel=0)
     elif function == "SCROLL":
-        ms.move(x=0, y=0, wheel=int(command))
+        if ms is not None:
+            ms.move(x=0, y=0, wheel=int(command))
     elif function == "CLICK":
-        if command == "left":
-            ms.click(Mouse.LEFT_BUTTON)
-        elif command == "middle":
-            ms.click(Mouse.MIDDLE_BUTTON)
-        elif command == "right":
-            ms.click(Mouse.RIGHT_BUTTON)
+        if ms is not None:
+            if command == "left":
+                ms.click(Mouse.LEFT_BUTTON)
+            elif command == "middle":
+                ms.click(Mouse.MIDDLE_BUTTON)
+            elif command == "right":
+                ms.click(Mouse.RIGHT_BUTTON)
     elif function == "VOLUME":
-        if command.isdigit():
-            for vc in range(0, abs(int(command)), 1):
-                if int(command) > 0:
-                    cc.send(ConsumerControlCode.VOLUME_INCREMENT)
-                elif int(command) < 0:
-                    cc.send(ConsumerControlCode.VOLUME_DECREMENT)
-        elif command == "mute":
-            cc.send(ConsumerControlCode.MUTE)
-    
+        # Consumer/media-control HID is intentionally unavailable in this profile.
+        if cc is not None:
+            if command.isdigit():
+                for vc in range(0, abs(int(command)), 1):
+                    if int(command) > 0:
+                        cc.send(ConsumerControlCode.VOLUME_INCREMENT)
+                    elif int(command) < 0:
+                        cc.send(ConsumerControlCode.VOLUME_DECREMENT)
+            elif command == "mute":
+                cc.send(ConsumerControlCode.MUTE)
 
 def get_substr(string, start, end):
     command = ""
     for idx in range(start+1, end):
-            command += string[idx]
+        command += string[idx]
     return command
 
 try:
@@ -146,7 +152,7 @@ try:
             looping = True
         execute_command(function, command)
         line = file.readline()
-    file.close()  
+    file.close()
     file = io.open("/pico_usb.txt", "r")
     while looping == True:
         file.seek(loop_pos)
@@ -156,7 +162,6 @@ try:
             command = get_substr(line, line.find("("), line.rfind(")"))
             execute_command(function, command)
             line = file.readline()
-
     file.close()
 
 except OSError as e:
