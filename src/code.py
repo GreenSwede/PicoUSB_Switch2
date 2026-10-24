@@ -41,7 +41,14 @@ def execute_command(function, command):
             keys = [0] * len(command)
             for idx in range(0, len(command), 1):
                 keys[idx] = getattr(Keycode, command[idx])
-            kb.send(*keys)
+            # Keep key-down and key-up in separate reports for long enough
+            # that slower USB hosts (including the Switch 2) can poll both.
+            # kb.send() releases immediately and can make short taps such as
+            # ENTER disappear on some hosts.
+            kb.press(*keys)
+            time.sleep(0.05)
+            kb.release_all()
+            time.sleep(0.05)
     elif function == "WRITE":
         layout.write(command)
     elif function == "HOLD":
